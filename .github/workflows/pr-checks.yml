@@ -1,0 +1,72 @@
+name: PR checks
+
+# shows the terraform plan on the PR and sanity-checks the build/manifests
+on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - "k8s/**"
+      - "terraform/**"
+      - ".github/workflows/**"
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  terraform-plan:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.WIF_SERVICE_ACCOUNT }}
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - run: terraform init
+
+      - id: plan
+        run: |
+          terraform plan -no-color -input=false \
+            -var="project_id=${{ vars.GCP_PROJECT }}" \
+            -var="bucket_name=${{ vars.GCS_BUCKET_NAME }}" \
+            -var="github_repo=${{ github.repository }}" \
+            > plan.txt
+          echo "plan<<EOF" >> "$GITHUB_OUTPUT"
+          cat plan.txt >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `#### Terraform Plan
+            \`\`\`
+            ${{ steps.plan.outputs.plan }}
+            \`\`\`
+            *Merging this PR will apply the above automatically (see deploy.yml).*`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker build (no push)
+        run: docker build -t nexus3-gcs:pr-check .
+
+      - name: Render Kustomize overlay
+        run: kubectl kustomize k8s/overlays/test

@@ -1,0 +1,84 @@
+name: Terraform apply and deploy
+
+# fires on push to main, basically "after a PR merges"
+# apply infra first, then build/push/deploy on top of it
+# pr-checks.yml already showed the plan, so this just runs it
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "k8s/**"
+      - "terraform/**"
+      - ".github/workflows/deploy.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  terraform-apply:
+    runs-on: ubuntu-latest
+    environment: test
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.WIF_SERVICE_ACCOUNT }}
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - run: terraform init
+
+      - run: |
+          terraform apply -auto-approve -input=false \
+            -var="project_id=${{ vars.GCP_PROJECT }}" \
+            -var="bucket_name=${{ vars.GCS_BUCKET_NAME }}" \
+            -var="github_repo=${{ github.repository }}"
+
+  build-and-deploy:
+    needs: terraform-apply
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push image
+        id: image
+        run: |
+          IMAGE="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/nexus3-gcs/nexus3-gcs:${{ github.sha }}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - id: get-credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ vars.GKE_CLUSTER }}
+          location: ${{ vars.GKE_ZONE }}
+
+      - name: Render manifests and apply
+        run: |
+          kubectl kustomize k8s/overlays/test \
+            | sed -e "s#REPLACE_WITH_IMAGE#${{ steps.image.outputs.image }}#" \
+                  -e "s#REPLACE_WITH_GSA_EMAIL#${{ vars.GSA_EMAIL }}#" \
+            | kubectl apply -f -
+
+      - name: Wait for rollout
+        run: kubectl -n nexus-test rollout status deploy/nexus --timeout=480s

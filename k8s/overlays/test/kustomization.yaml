@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: nexus-test
+resources:
+  - ../../base
+
+# image/SA annotation stay as REPLACE_WITH_* placeholders, sed fills them
+# in at apply time (scripts/deploy.sh)
+
+patches:
+  - target:
+      kind: Deployment
+      name: nexus
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            # GKE's own system pods eat most of the node's ~940m CPU already
+            cpu: 50m
+            memory: 1Gi
+          limits:
+            cpu: 500m
+            # gives some headroom over steady state for first-boot spikes
+            memory: 1.75Gi

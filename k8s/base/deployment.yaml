@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus
+  namespace: nexus
+  labels:
+    app: nexus
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # ReadWriteOnce volume, can't have two pods mounting it
+  selector:
+    matchLabels:
+      app: nexus
+  template:
+    metadata:
+      labels:
+        app: nexus
+    spec:
+      serviceAccountName: nexus
+      securityContext:
+        fsGroup: 200
+      containers:
+        - name: nexus
+          image: REPLACE_WITH_IMAGE # filled in at apply time
+          ports:
+            - name: http
+              containerPort: 8081
+          env:
+            - name: INSTALL4J_ADD_VM_PARAMS
+              value: "-Xms600m -Xmx900m -XX:MaxDirectMemorySize=384m"
+          volumeMounts:
+            - name: nexus-data
+              mountPath: /nexus-data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 1.5Gi
+            limits:
+              cpu: "1"
+              memory: 2.5Gi
+          readinessProbe:
+            httpGet:
+              path: /service/rest/v1/status
+              port: http
+            initialDelaySeconds: 90
+            periodSeconds: 15
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /service/rest/v1/status
+              port: http
+            initialDelaySeconds: 180
+            periodSeconds: 30
+            failureThreshold: 6
+      volumes:
+        - name: nexus-data
+          persistentVolumeClaim:
+            claimName: nexus-data

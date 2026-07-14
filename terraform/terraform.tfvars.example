@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored -
+# never commit real project IDs/bucket names if this repo is public and
+# they should stay private; here they're just not secret-sensitive but the
+# file is still ignored by convention.
+
+project_id  = "your-gcp-project-id"
+bucket_name = "your-gcp-project-id-nexus-blobstore" # must be globally unique
