@@ -64,3 +64,11 @@ resource "google_project_iam_member" "github_actions_gke_deploy" {
   role    = "roles/container.developer"
   member  = "serviceAccount:${google_service_account.github_actions.email}"
 }
+
+# needed to manage google_project_service resources at all (list/enable/
+# disable APIs) - without this, CI can't even read its own plan
+resource "google_project_iam_member" "github_actions_serviceusage_admin" {
+  project = var.project_id
+  role    = "roles/serviceusage.serviceUsageAdmin"
+  member  = "serviceAccount:${google_service_account.github_actions.email}"
+}
