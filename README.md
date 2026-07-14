@@ -153,3 +153,5 @@ See [`CI-CD.md`](./CI-CD.md).
   namespace=...` on that environment's `terraform apply` — otherwise the
   pod authenticates as a KSA the GCP service account doesn't trust, and
   GCS writes fail with a permissions error.
+
+_CI/CD pipeline verified end-to-end: PR checks + auto-deploy on merge._
