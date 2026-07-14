@@ -78,6 +78,10 @@ resource "google_storage_bucket" "nexus_blobstore" {
   uniform_bucket_level_access = true
   force_destroy               = false
 
+  labels = {
+    managed-by = "terraform"
+  }
+
   versioning {
     enabled = false
   }
