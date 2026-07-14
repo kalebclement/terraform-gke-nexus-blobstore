@@ -30,6 +30,12 @@ resource "google_project_service" "firestore" {
   disable_on_destroy = false
 }
 
+resource "google_project_service" "cloudresourcemanager" {
+  project            = var.project_id
+  service            = "cloudresourcemanager.googleapis.com"
+  disable_on_destroy = false
+}
+
 # plugin uses Datastore to track soft-deleted blobs - has to be named
 # "(default)", DATASTORE_MODE since the plugin's client lib needs that API
 
@@ -55,6 +61,8 @@ resource "google_artifact_registry_repository" "nexus3_gcs" {
 
 data "google_project" "current" {
   project_id = var.project_id
+
+  depends_on = [google_project_service.cloudresourcemanager]
 }
 
 # our node pool has no service_account set, so nodes run as the default
