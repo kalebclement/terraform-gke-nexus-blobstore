@@ -1,13 +1,11 @@
 name: PR checks
 
 # shows the terraform plan on the PR and sanity-checks the build/manifests
+# no path filter on purpose - this is a required check, and a required
+# check that can silently never trigger permanently blocks any PR that
+# doesn't happen to touch those paths (e.g. a docs-only change)
 on:
   pull_request:
-    paths:
-      - "Dockerfile"
-      - "k8s/**"
-      - "terraform/**"
-      - ".github/workflows/**"
 
 permissions:
   contents: read
