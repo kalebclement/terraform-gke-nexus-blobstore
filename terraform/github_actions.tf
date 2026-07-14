@@ -72,3 +72,16 @@ resource "google_project_iam_member" "github_actions_serviceusage_admin" {
   role    = "roles/serviceusage.serviceUsageAdmin"
   member  = "serviceAccount:${google_service_account.github_actions.email}"
 }
+
+# terraform plan refreshes every resource in the config, not just the ones
+# being changed - narrow roles above cover deploy actions but not the read
+# access plan needs across every resource type (WI pools, service accounts,
+# Firestore, bucket metadata, AR IAM, compute instance groups...). Rather
+# than chase each one individually, editor covers all of it - a deliberate
+# broader-than-strict-least-privilege call for a single-project, solo-dev
+# CI service account.
+resource "google_project_iam_member" "github_actions_editor" {
+  project = var.project_id
+  role    = "roles/editor"
+  member  = "serviceAccount:${google_service_account.github_actions.email}"
+}
